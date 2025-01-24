@@ -76,6 +76,11 @@
       function stripInlineComment(line) {
         const trimmed = line.trim();
         const hashIndex = trimmed.indexOf('#');
+        // 예외 처리 FncBegin, FncEnd. 
+
+        if(trimmed.includes("fncBegin") || trimmed.includes("fncEnd") ){
+          return trimmed;
+        }
         if (hashIndex >= 0) {
           // '#' 발견 → '#' 이전까지만
           return trimmed.slice(0, hashIndex).trim();
@@ -91,9 +96,48 @@
 
       // 정규식 모음
       const hexRegex = /^0x[0-9A-Fa-f]{8}$/;
+      const nameRegex = /#name:[^#]+#/; // 라벨에 #name:이 반드시 포함. 
 
+      //var stack = 
+      var fncCallStack = [];
+      var labelCallStack = [];
+
+      function checkFncBeginFormat(tokens){
+        //fncCallStack.push(tokens[1]); - 구현진행중
+ 
+        if (!nameRegex.test(tokens[1])) {
+          return { isSuccess: false, reason: `두 번째 토큰("${tokens[1]}") 형식 불일치` };
+        }
+        return { isSuccess: true, reason: '규칙 만족' };
+        // 정규식을 검사를 함. 
+        // 스텍에다 토큰 1에 해당하는 내용을 push를 한다.
+        //tokens.length
+      }  
+      function checkFncEndFormat(tokens){
+        //fncCallStack.indexOf('');
+        // if(tokens.length!= 2){
+        //   return { isSuccess: false, reason: `토큰 개수(${tokens.length})가 2개가 아닙니다.` };
+        // }
+        console.log(JSON.stringify(tokens))
+        if (!nameRegex.test(tokens[1])) {
+          return { isSuccess: false, reason: `두 번째 토큰("${tokens[1]}") 형식 불일치` };
+        }
+        return { isSuccess: true, reason: '규칙 만족' };
+      }
       function checkR32Format(tokens) {
-        // 정적 분석툴 제작중
+        if (tokens.length !== 2) {
+          // w32 토큰이 3이 아니라면 주석이 있는지 확인
+          if (tokens.length < 2) {
+            return { isSuccess: false, reason: `토큰 개수(${tokens.length})가 2미만` };
+          } else if (tokens.length > 3 && tokens[3][0] != '#') {
+            return { isSuccess: false, reason: `토큰 개수(${tokens.length})가 2초과` };
+          }
+        }
+        // hex 값 확인지 확인
+        if (!hexRegex.test(tokens[1])) {
+          return { isSuccess: false, reason: `두 번째 토큰("${tokens[1]}") 형식 불일치` };
+        }
+        return { isSuccess: true, reason: '규칙 만족' };
       }
 
       function checkW32Format(tokens) {
@@ -172,16 +216,54 @@
             commandStats[cmd].usageCount++;
 
             logMessage(`  -> 인식된 명령어='${cmd}', usageCount=${commandStats[cmd].usageCount}`);
+            switch(tokens[0]){
+              case 'w32': case 'w16': case 'w8': {
+                const result = checkW32Format(tokens);
+                if (result.isSuccess) {
+                  commandStats[cmd].successLines.push(lineNum);
+                  logMessage(`  -> 규칙 만족 : ${result.reason} => Success`);
+                } else {
+                  commandStats[cmd].failLines.push(lineNum);
+                  logMessage(`  -> 규칙 불만족 : ${result.reason} => Fail`);
+                }
+              } break;
+              case  'r32' :{
+                const result = checkR32Format(tokens);
+                if (result.isSuccess) {
+                  commandStats[cmd].successLines.push(lineNum);
+                  logMessage(`  -> 규칙 만족 : ${result.reason} => Success`);
+                } else {
+                  commandStats[cmd].failLines.push(lineNum);
+                  logMessage(`  -> 규칙 불만족 : ${result.reason} => Fail`);
+                }
+
+              } break;
+              case 'fncBegin':{
+                const result = checkFncBeginFormat(tokens);
+                if (result.isSuccess) {
+                  commandStats[cmd].successLines.push(lineNum);
+                  logMessage(`  -> 규칙 만족 : ${result.reason} => Success`);
+                } else {
+                  commandStats[cmd].failLines.push(lineNum);
+                  logMessage(`  -> 규칙 불만족 : ${result.reason} => Fail`);
+                }
+
+              }break;
+              case 'fncEnd':{
+
+                const result = checkFncEndFormat(tokens);
+                if (result.isSuccess) {
+                  commandStats[cmd].successLines.push(lineNum);
+                  logMessage(`  -> 규칙 만족 : ${result.reason} => Success`);
+                } else {
+                  commandStats[cmd].failLines.push(lineNum);
+                  logMessage(`  -> 규칙 불만족 : ${result.reason} => Fail`);
+                }
+              }break;
+            }
 
             // 3) 규칙 검사
-            const result = checkW32Format(tokens);
-            if (result.isSuccess) {
-              commandStats[cmd].successLines.push(lineNum);
-              logMessage(`  -> 규칙 만족 : ${result.reason} => Success`);
-            } else {
-              commandStats[cmd].failLines.push(lineNum);
-              logMessage(`  -> 규칙 불만족 : ${result.reason} => Fail`);
-            }
+           
           });
 
           // 결과 표
